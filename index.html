@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+    <title>ECharts</title>
+    <link rel="stylesheet" type="text/css" href="css/style.css">
+</head>
+<body>
+	<div id="main" style="height:800px;width:1080px;"></div>
+	<script type="text/javascript" src="js/jquery-2.1.4.min.js"></script>
+	<script src="./build/dist/echarts.js"></script>
+    <script type="text/javascript">
+        // 路径配置
+          require.config({
+            paths: {
+                echarts: './build/dist'
+            }
+        });
+
+        //使用
+        var area;
+        var obj;
+		var region;
+        index();
+        function index(){  //主视图，返回area
+        	require(
+            [
+                'echarts',
+                'echarts/chart/bar', // 使用柱状图就加载bar模块，按需加载
+                'echarts/chart/map',
+            ],
+            function (ec) {
+                // 基于准备好的dom，初始化echarts图表
+                var myChart = ec.init(document.getElementById('main')); 
+                var cityMap = {
+				    "重庆市": "500100",
+				};
+
+
+				var curIndx = 0;
+				var mapType = [];
+				var mapGeoData = require('echarts/util/mapData/params');
+				for (var city in cityMap) {
+				    mapType.push(city);
+				    // 自定义扩展图表类型
+				    mapGeoData.params[city] = {
+				        getGeoJson: (function (c) {
+				            var geoJsonName = cityMap[c];
+				            var url = ' data/city.json';
+				            return function (callback) {
+				                $.getJSON(url, callback);
+				            }
+				        })(city)
+				    }
+				}
+
+				var ecConfig = require('echarts/config');
+				var zrEvent = require('zrender/tool/event');
+				document.getElementById('main').onmousewheel = function (e){
+				    var event = e || window.event;
+				    curIndx += zrEvent.getDelta(event) > 0 ? (-1) : 1;
+				    if (curIndx < 0) {
+				        curIndx = mapType.length - 1;
+				    }
+				    var mt = mapType[curIndx % mapType.length];
+				    option.series[0].mapType = mt;
+				    option.title.subtext = mt;
+				    myChart.setOption(option, true);
+				    zrEvent.stop(event);
+				};
+
+				var cData = [];
+				$.ajax({  
+				    type:"POST",  
+				    url:"php/index.php",
+				    dataType:"json",
+				    async:false,
+				    success:function(data){
+				    	//处理数据
+				    	cData = data;
+				    	
+				    },
+				    error:function(){
+				    	alert('wrong!');
+				    } 
+				}); 
+				myChart.on(ecConfig.EVENT.MAP_SELECTED, function (param){
+					for (var i = 0; i < cData.length; i++) {
+						if(cData[i].name == param.target){
+							area = cData[i].name;//根据区域调用bar(area)							
+							bar(area);
+						}
+					};
+				});
+				Array.prototype.unique3 = function(){
+					var res = [];
+					var json = {};
+					var jsonLength = {};
+					var key = 0;
+					var all = 0;
+					for(var i = 0; i < this.length; i++){
+						if(!json[this[i].name]){
+							json[this[i].name] = this[i].value;
+							jsonLength[this[i].name] = 1; 
+							
+						}else{
+							json[this[i].name] = ((parseFloat(json[this[i].name]) + parseFloat(this[i].value))).toFixed(2);
+							jsonLength[this[i].name] = jsonLength[this[i].name] +1;
+						}
+					}
+					for(i in jsonLength){
+						json[i] = json[i]/(jsonLength[i]);
+						console.log("jjjj....:"+json[i]);
+					}
+					for(i in json){
+						res.push({'name':i,'value':json[i]});
+						console.log(json[i]);
+					}
+					return res;
+				}
+				cData = cData.unique3();
+				option = {
+				    title: {
+				        text : '重庆市地图',
+				        subtext : '重庆市'
+				    },
+				    tooltip : {
+				        trigger: 'item',
+				        formatter: '{b}'
+				    },
+				      dataRange: {
+				        min: 0,
+				        max: 100,
+				        text:['High','Low'],
+				        realtime: false,
+				        calculable : true,
+				        //color: ['orangered','yellow','lightskyblue']
+						color: ['green','yellow','orangered','red']//颜色
+				    },
+				    roamController: {
+				        show: true,
+				        x: 'right',
+				        mapTypeControl: {
+				            'china': true
+				        }
+				    },
+				    series : [
+				        {
+				            name: '重庆市主要区（县）地图',
+				            type: 'map',
+				            mapType: '重庆市',
+				            selectedMode : 'single',
+				            itemStyle:{
+				                normal:{label:{show:true}},//取消地区的显示
+				                emphasis:{label:{show:true}}
+				            },
+				            data:cData
+				        }
+				    ]
+				};
+                // 为echarts对象加载数据 
+                myChart.setOption(option); 
+                return area;
+            }
+        );
+        }
+        function bar(area){//第二页，返回obj
+        	
+
+        	require(
+            [
+                'echarts',
+                'echarts/chart/bar', // 使用柱状图就加载bar模块，按需加载
+                'echarts/chart/map',
+                'echarts/chart/pie',
+            ],function (ec) {
+                // 基于准备好的dom，初始化echarts图表
+                var myChart = ec.init(document.getElementById('main'));
+                var cIndustry;
+                myChart.on('click', function (param) {
+      				radar(param.seriesName,area);
+            	}); 
+            	var cArea = area;
+                var cText = cArea +"数据";
+                var cBarName1 = [];
+                var cBarName2 = [];
+                var cBarName3 =[];
+				var cBarName4 =[];
+				var cBarName5 =[];
+				var cBarName6 =[];
+                // console.log('123'+cIndustry);
+                $.ajax({  
+				    type:"POST",  
+				    url:"php/radar.php",
+				    data:'data='+cArea,
+				    dataType:"json",
+				    async:false,
+				    success:function(data){
+				    	//处理数据
+				    	data = data;
+				    	console.log("ccc"+data[0].name);
+				    	for (var i = 0; i < data.length; i++) {
+				    		if(data[i].name == "交通"){
+					    		cBarName1.push(data[i]);
+					    	}else if(data[i].name == "政府") {
+					    		cBarName2.push(data[i]);
+					    	}else if(data[i].name == "医疗卫生") {
+					    		cBarName3.push(data[i]);
+					    	}		
+							else if(data[i].name == "企业") {
+					    		cBarName4.push(data[i]);
+					    	}
+							else if(data[i].name == "事业") {
+					    		cBarName5.push(data[i]);
+					    	}
+							else if(data[i].name == "金融") {
+					    		cBarName6.push(data[i]);
+					    	}
+
+				    	}
+				    },
+				    error:function(){
+				    	alert('wrong!');
+				    } 
+				}); 
+				
+                option = {
+				    title : {
+				        text: cText,
+				        subtext: '等级区分',
+				        x:'center',
+				    },
+				    tooltip : {
+				        trigger: 'item',
+				        formatter: "{a} <br/>{b} : {c} ({d}%)"
+				    },
+				    legend: {
+				        orient : 'vertical',
+				        x : 'left',
+				        data:['交通','政府','医疗卫生','企业','事业','金融']
+				    },
+				    toolbox: {
+				        show : true,
+				        feature : {
+				            mark : {show: true},
+				            dataView : {show: true, readOnly: false},
+				            magicType : {
+				                show: true, 
+				                type: ['pie', 'funnel'],
+				                option: {
+				                    funnel: {
+				                        // x: '25%',
+				                        width: '5%',
+				                        height:'50%',
+				                        funnelAlign: 'left',
+				                        max: 1548
+				                    }
+				                }
+				            },
+				            restore : {show: true},
+				            saveAsImage : {show: true}
+				        }
+				    },
+				    calculable : false,
+				    series : [
+				        {
+				            name:'交通',
+				            type:'pie',
+				            radius : '25%',
+				            center: ['20%', '60%'],
+				            x:'10%',
+				            data: cBarName1
+				        },
+				        {
+				            name:'政府',
+				            type:'pie',
+				            radius : '25%',
+				            center: ['50%', '60%'],
+				            x:'10%',	
+				            data:cBarName2
+				        },
+				        {
+				            name:'医疗卫生',
+				            type:'pie',
+				            radius : '25%',
+				            center: ['80%', '60%'],
+				            x:'10%',	
+				            data:cBarName3
+				        },
+						  {
+				            name:'企业',
+				            type:'pie',
+				            radius : '25%',
+				            center: ['80%', '60%'],
+				            x:'10%',	
+				            data:cBarName4
+				        },
+						  {
+				            name:'事业',
+				            type:'pie',
+				            radius : '25%',
+				            center: ['80%', '60%'],
+				            x:'10%',	
+				            data:cBarName5
+				        },
+							  {
+				            name:'金融',
+				            type:'pie',
+				            radius : '25%',
+				            center: ['80%', '60%'],
+				            x:'10%',	
+				            data:cBarName6
+				        },
+				    ]
+				};  
+                // 为echarts对象加载数据 
+                myChart.setOption(option); 
+               // obj = {area};
+	            return obj;
+            }
+       );
+        }
+        function radar(obj,area){//第三页，无返回
+        	require(
+            [
+                'echarts',
+                'echarts/chart/bar', // 使用柱状图就加载bar模块，按需加载
+                'echarts/chart/map',
+                'echarts/chart/pie',
+                'echarts/chart/radar'
+            ],function (ec) {
+                // 基于准备好的dom，初始化echarts图表
+                var myChart = ec.init(document.getElementById('main')); 
+                var cArea = area;
+                var cIndustry = obj;
+                var cText = cArea +"详细";
+                var cRadar1 = [];
+                var cRadar2 = [];
+                myChart.on('click', function (param) {
+               		bar2(param.name); //在radar中点击，调用bar2()
+            	}); 
+                $.ajax({  
+				    type:"POST",  
+				    url:"php/bar.php",
+				    data:'area='+cArea+'&Industry='+cIndustry,
+				    dataType:"json",
+				    async:false,
+				    success:function(data){
+				    	//处理数据
+				    	cRadar1 = data;
+				    },
+				    error:function(){
+				    	alert('wrong!');
+				    } 
+				}); 
+				$.ajax({  
+				    type:"POST",  
+				    url:"php/bar2.php",
+					data:'area='+cArea+'&Industry='+cIndustry,
+													
+					
+					//url:"php/bar5.php",
+				    //data:'Industry='+cIndustry,
+				    dataType:"json",
+				    async:false,
+				    success:function(msg){
+				    	//处理数据
+				    	cRadar2 = msg;
+				    },
+				    error:function(){
+				    	alert('wrong!');
+				    } 
+				}); 
+				var cLength = cRadar1.length;
+				var cLegend = [];
+				for(var i = 1;i<=cLength;i++){
+					cLegend.push(i);
+				}
+                option = {
+				    title : {
+				        text: cText,
+				        subtext: '具体分数'
+				    },
+				    tooltip : {
+				        trigger: 'axis'
+				    },
+				    legend: {
+				        orient : 'vertical',
+				        x : 'right',
+				        y : 'bottom',
+				        data:cLegend
+				    },
+				    toolbox: {
+				        show : true,
+				        feature : {
+				            mark : {show: true},
+				            dataView : {show: true, readOnly: false},
+				            restore : {show: true},
+				            saveAsImage : {show: true}
+				        }
+				    },
+				    polar : [
+				       {
+				           indicator : [
+				                { text: '物理', max: 100},
+				                { text: '网络', max: 100},
+				                { text: '应用', max: 100},
+				                { text: '主机', max: 100},
+				                { text: '数据', max: 100},
+				            ],
+				            center : ['25%',500],
+				            radius:150,
+				        },
+				        {
+				           indicator : [
+				                { text: '安全管理制度', max: 100},
+				                { text: '安全管理机构', max: 100},
+				                { text: '人员安全管理', max: 100},
+				                { text: '系统建设管理', max: 100},
+				                { text: '系统运维管理', max: 100},
+				            ],
+				            center : ['65%',500],
+				            radius:150,
+				        }
+				    ],
+				    calculable : false,
+				    series : [
+				        {
+				            name: '预算 vs 开销（Budget vs spending）',
+				            type: 'radar',
+				            center: ['10%', '80%'],
+				            data : cRadar1
+				        },
+				        {
+				            name: '预t算 vs 开销（Budget vs spending）',
+				            type: 'radar',
+				            polarIndex : 1,
+				            center: ['60%', '80%'],
+				            data : cRadar2
+				        }
+				    ]
+				};
+                // 为echarts对象加载数据 
+                myChart.setOption(option); 
+            }
+       );
+        }
+        function bar2(obj){//第四页，根据栏目显示bar图
+        	require(
+            [
+                'echarts',
+                'echarts/chart/bar', // 使用柱状图就加载bar模块，按需加载
+                'echarts/chart/map',
+                'echarts/chart/pie',
+                'echarts/chart/radar'
+            ],function (ec) {
+                // 基于准备好的dom，初始化echarts图表
+                var myChart = ec.init(document.getElementById('main')); 
+                var cSubject = obj;
+                var cText = "各区"+cSubject+"详细分数";
+                var cData1 = [];
+                var cData2 = [];
+                myChart.on('click', function (param) {
+             	   bar(param.name);
+            	}); 
+                $.ajax({  
+				    type:"POST",  
+				    url:"php/bar3.php",
+				    data:'Subject='+cSubject,
+				    dataType:"json",
+				    async:false,
+				    success:function(data){
+				    	//处理数据
+				    	cData = data;
+				    	
+				    },
+				    error:function(){
+				    	alert('wrong!');
+				    } 
+				}); 
+
+				Array.prototype.unique3 = function(){
+					var res = [];
+					var json = {};
+					var jsonLength = {};
+					var key = 0;
+					var all = 0;
+					for(var i = 0; i < this.length; i++){
+						if(!json[this[i].region]){
+							json[this[i].region] = this[i].value;
+							jsonLength[this[i].region] = 1; 
+							
+						}else{
+							json[this[i].region] = ((parseFloat(json[this[i].region]) + parseFloat(this[i].value))).toFixed(2);
+							jsonLength[this[i].region] = jsonLength[this[i].region] +1;
+						}
+					}
+					for(i in jsonLength){
+						json[i] = json[i]/(jsonLength[i]);
+						console.log("jjjj....:"+json[i]);
+					}
+					for(i in json){
+						res.push({'region':i,'value':json[i]});
+						console.log(json[i]);
+					}
+					return res;
+				}
+				data = cData.unique3();
+				for(var i = 0;i <data.length;i++){
+		    		cData1.push(data[i].region);
+		    		cData2.push(parseInt(data[i].value));
+		    	}
+                option = {
+				    title : {
+				        text: cText,
+				        subtext: '全部'
+				    },
+				    tooltip : {
+				        trigger: 'axis'
+				    },
+				    legend: {
+				        data:[cSubject]
+				    },
+				    toolbox: {
+				        show : true,
+				        feature : {
+				            mark : {show: true},
+				            dataView : {show: true, readOnly: false},
+				            magicType : {show: true, type: ['line', 'bar']},
+				            restore : {show: true},
+				            saveAsImage : {show: true}
+				        }
+				    },
+				    calculable : false,
+				    xAxis : [
+				        {
+				            type : 'category',
+				            data : cData1
+				        }
+				    ],
+				    yAxis : [
+				        {
+				            type : 'value'
+				        }
+				    ],
+				    series : [
+				        {
+				            name:cSubject,
+				            type:'bar',
+				            data:cData2,
+				            markPoint : {
+				                data : [
+				                    {type : 'max', name: '最大值'},
+				                    {type : 'min', name: '最小值'}
+				                ]
+				            },
+				            markLine : {
+				                data : [
+				                    {type : 'average', name: '平均值'}
+				                ]
+				            }
+				        }
+				    ]
+				};
+                // 为echarts对象加载数据 
+                myChart.setOption(option); 
+            }
+       );
+        }
+		
+	
+		
+    </script>
+</body>
+</html>
